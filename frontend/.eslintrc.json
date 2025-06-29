@@ -1,0 +1,6 @@
+{
+  "rules": {
+    "react/button-has-type": "warn",
+    "jsx-a11y/label-has-associated-control": "warn"
+  }
+}
