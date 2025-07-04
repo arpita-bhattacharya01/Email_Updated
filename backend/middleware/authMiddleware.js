@@ -7,9 +7,11 @@ import {
   deleteRefreshTokenByUserId,
 } from '../models/User.js';
 
-// Generate access token
+// =========================
+// 🔐 Access Token Generator
+// =========================
 export const generateAccessToken = (user) => {
-  console.log('🔐 Generating access token for user:', { id: user.id, role: user.role });
+  console.log('🔐 Generating access token:', { id: user.id, role: user.role });
   return jwt.sign(
     { id: user.id, role: user.role },
     process.env.JWT_SECRET,
@@ -17,17 +19,21 @@ export const generateAccessToken = (user) => {
   );
 };
 
-// Generate refresh token
+// ==========================
+// 🔄 Refresh Token Generator
+// ==========================
 export const generateRefreshToken = (user) => {
-  console.log('🔄 Generating refresh token for user:', { id: user.id });
+  console.log('🔄 Generating refresh token:', { id: user.id });
   return jwt.sign(
     { id: user.id },
-    process.env.REFRESH_TOKEN_SECRET, // Updated to match .env
+    process.env.REFRESH_TOKEN_SECRET,
     { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '30d' }
   );
 };
 
-// Middleware: Protect private routes
+// ======================
+// 🔐 Protect - For Users
+// ======================
 export const protect = asyncHandler(async (req, res, next) => {
   let token = req.cookies?.accessToken;
 
@@ -36,75 +42,88 @@ export const protect = asyncHandler(async (req, res, next) => {
   }
 
   if (!token) {
-    console.error('❌ No token provided for request:', req.originalUrl);
     return res.status(401).json({ success: false, message: 'Access denied. No token provided.' });
   }
 
   try {
-    console.log('🔐 Verifying token:', token);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('🔐 Decoded token:', decoded);
     const user = await getUserById(decoded.id);
 
     if (!user) {
-      console.error('❌ User not found for ID:', decoded.id);
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
-    req.user = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-    };
-    console.log('✅ User authenticated:', req.user);
-
+    req.user = user;
     next();
   } catch (err) {
-    console.error('❌ Token verification failed:', err.message);
+    console.error('❌ protect error:', err.message);
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 });
 
-// Role-based authorization
+// ====================================
+// 🔐 Admin Protection Middleware
+// ====================================
+export const protectAdmin = asyncHandler(async (req, res, next) => {
+  let token = req.cookies?.adminToken || req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Admin token missing' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Optionally use ADMIN_JWT_SECRET
+    const user = await getUserById(decoded.id);
+
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied for non-admin' });
+    }
+
+    req.admin = user;
+    next();
+  } catch (err) {
+    console.error('❌ protectAdmin error:', err.message);
+    return res.status(401).json({ success: false, message: 'Invalid or expired admin token' });
+  }
+});
+
+// ===========================================
+// ✅ Role-Based Authorization for Any Route
+// ===========================================
 export const authorizeRoles = (...roles) => {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      console.error('❌ Role unauthorized:', { userRole: req.user?.role, requiredRoles: roles });
+    const role = req.user?.role || req.admin?.role;
+    if (!role || !roles.includes(role)) {
       return res.status(403).json({
         success: false,
-        message: `Role '${req.user?.role || 'unknown'}' is not allowed to access this resource.`,
+        message: `Role '${role || 'unknown'}' is not allowed to access this resource.`,
       });
     }
-    console.log('✅ Role authorized:', req.user.role);
     next();
   };
 };
 
-// Refresh token logic
+// ==============================
+// 🔄 Refresh Token Handler Logic
+// ==============================
 export const handleRefreshToken = asyncHandler(async (req, res) => {
   const refreshToken =
     req.cookies?.refreshToken || req.body.refreshToken || req.headers['x-refresh-token'];
 
   if (!refreshToken) {
-    console.error('❌ No refresh token provided');
     return res.status(401).json({ success: false, message: 'Refresh token required' });
   }
 
   try {
-    console.log('🔄 Verifying refresh token:', refreshToken);
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET); // Updated to match .env
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
     const savedToken = await getRefreshTokenByToken(refreshToken);
 
     if (!savedToken || savedToken.user_id !== decoded.id) {
-      console.error('❌ Invalid refresh token for user ID:', decoded.id);
       return res.status(403).json({ success: false, message: 'Invalid refresh token' });
     }
 
     const user = await getUserById(decoded.id);
     if (!user) {
-      console.error('❌ User not found for ID:', decoded.id);
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
@@ -128,7 +147,6 @@ export const handleRefreshToken = asyncHandler(async (req, res) => {
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
-    console.log('✅ Refresh token successful for user:', user.id);
     return res.status(200).json({
       success: true,
       accessToken: newAccessToken,
@@ -142,52 +160,50 @@ export const handleRefreshToken = asyncHandler(async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('❌ Refresh token verification failed:', err.message);
+    console.error('❌ Refresh error:', err.message);
     return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
   }
 });
 
-// Logout: clear cookies and tokens
+// ==========================
+// 🔓 Logout Logic
+// ==========================
 export const logout = asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
+  const userId = req.user?.id || req.admin?.id;
   const refreshToken = req.cookies?.refreshToken;
 
   if (userId && refreshToken) {
     await deleteRefreshTokenByUserId(userId, refreshToken);
-    console.log('✅ Refresh token deleted for user:', userId);
   }
 
   res.clearCookie('accessToken');
   res.clearCookie('refreshToken');
+  res.clearCookie('adminToken'); // optional for admin
 
-  console.log('✅ User logged out:', userId);
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 
-// Middleware to check if user is authenticated
+// ============================
+// 🔍 Quick Auth Checker
+// ============================
 export const isAuthenticated = asyncHandler(async (req, res, next) => {
   const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
 
   if (!token) {
-    console.error('❌ No token provided for authentication check');
     return res.status(401).json({ success: false, message: 'Access denied. No token provided.' });
   }
 
   try {
-    console.log('🔐 Verifying token for isAuthenticated:', token);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await getUserById(decoded.id);
 
     if (!user) {
-      console.error('❌ User not found for ID:', decoded.id);
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
     req.user = user;
-    console.log('✅ User authenticated for isAuthenticated:', user.id);
     next();
   } catch (err) {
-    console.error('❌ Token verification failed for isAuthenticated:', err.message);
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 });

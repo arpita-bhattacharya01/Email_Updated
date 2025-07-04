@@ -79,9 +79,7 @@ const SignUp: React.FC = () => {
       }
     } catch (err: any) {
       console.error('🚨 Signup error:', err?.response?.data || err.message);
-      setServerError(
-        err?.response?.data?.message || 'Signup failed. Please try again later.'
-      );
+      setServerError(err?.response?.data?.message || 'Signup failed. Please try again later.');
     }
   };
 
@@ -124,6 +122,7 @@ const SignUp: React.FC = () => {
                   <TextField
                     {...field}
                     label="First Name"
+                    autoComplete="given-name"
                     fullWidth
                     margin="normal"
                     size="small"
@@ -146,6 +145,7 @@ const SignUp: React.FC = () => {
                   <TextField
                     {...field}
                     label="Last Name"
+                    autoComplete="family-name"
                     fullWidth
                     margin="normal"
                     size="small"
@@ -169,6 +169,8 @@ const SignUp: React.FC = () => {
                     <TextField
                       {...field}
                       label="Email"
+                      type="email"
+                      autoComplete="email"
                       fullWidth
                       margin="normal"
                       size="small"
@@ -196,6 +198,7 @@ const SignUp: React.FC = () => {
                     {...field}
                     label="Password"
                     type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
                     fullWidth
                     margin="normal"
                     size="small"
@@ -205,7 +208,11 @@ const SignUp: React.FC = () => {
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                          <IconButton
+                            onClick={() => setShowPassword(!showPassword)}
+                            edge="end"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
                             {showPassword ? <VisibilityOff /> : <Visibility />}
                           </IconButton>
                         </InputAdornment>
@@ -223,6 +230,7 @@ const SignUp: React.FC = () => {
                     {...field}
                     label="Confirm Password"
                     type={showConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
                     fullWidth
                     margin="normal"
                     size="small"
@@ -232,7 +240,11 @@ const SignUp: React.FC = () => {
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end">
+                          <IconButton
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            edge="end"
+                            aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                          >
                             {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                           </IconButton>
                         </InputAdornment>

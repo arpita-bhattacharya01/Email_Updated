@@ -1,4 +1,3 @@
-// server.js
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -15,6 +14,7 @@ import nodemailer from 'nodemailer';
 import emailRoutes from './routes/emailRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import emailModelRoutes from './routes/emailModelRoutes.js';
+import otpRoutes from './routes/otpRoutes.js';
 
 dotenv.config();
 
@@ -29,8 +29,11 @@ const REQUIRED_ENV_VARS = [
   'SMTP_USER',
   'SMTP_PASS',
   'JWT_SECRET',
+  'JWT_REFRESH_SECRET',
   'CLIENT_URL',
+  'RECAPTCHA_SECRET_KEY',
 ];
+
 REQUIRED_ENV_VARS.forEach((key) => {
   if (!process.env[key]) {
     console.error(`❌ Missing environment variable: ${key}`);
@@ -46,6 +49,8 @@ const PORT = process.env.PORT || 5000;
 // ✅ CORS
 const allowedOrigins = [
   'http://localhost:5173',
+  'http://localhost:5173/EmailNew',
+  'https://gauravmudgal.com',
   process.env.CLIENT_URL?.replace(/\/$/, ''),
 ];
 app.use(cors({
@@ -69,7 +74,7 @@ app.use(compression());
 
 // ✅ Rate Limiting
 const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 100,
   message: { success: false, message: 'Too many requests, please try again later.' },
 });
@@ -89,7 +94,7 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 app.locals.pool = pool;
-console.log('✅ MySQL pool created and connection verified (db.js)');
+console.log('✅ MySQL pool created and connection verified');
 
 // ✅ Nodemailer
 const transporter = nodemailer.createTransport({
@@ -114,6 +119,7 @@ app.locals.transporter = transporter;
 app.use('/api', authRoutes);
 app.use('/api/emails', emailRoutes);
 app.use('/api/emails/model', emailModelRoutes);
+app.use('/api/auth', otpRoutes);
 
 // ✅ Health Check
 app.get('/', (req, res) => res.send('✅ Email App API is running'));
@@ -134,6 +140,7 @@ process.on('unhandledRejection', (error) => {
   console.error('❌ Unhandled Rejection:', error);
   process.exit(1);
 });
+
 
 
 // ✅ server.js

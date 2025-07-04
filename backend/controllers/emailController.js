@@ -6,7 +6,7 @@ import nodemailer from 'nodemailer';
 import { getUserByEmail } from '../models/User.js';
 import Email from '../models/Email.js';
 
-// Initialize SMTP transporter
+// ✅ Initialize SMTP transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT),
@@ -17,7 +17,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verify SMTP connection
+// ✅ Verify SMTP connection
 transporter.verify((err, success) => {
   if (err) {
     console.error('❌ SMTP verification failed:', err.message);
@@ -26,7 +26,7 @@ transporter.verify((err, success) => {
   }
 });
 
-// Send Email Utility
+// ✅ Send App Email Utility
 export const sendAppEmail = async ({ to, subject, html }) => {
   if (!to || typeof to !== 'string' || !to.includes('@')) {
     console.error('❌ Invalid recipient email:', to);
@@ -53,35 +53,30 @@ export const sendAppEmail = async ({ to, subject, html }) => {
   }
 };
 
-// Send new email
+// ✅ Send new email
 export const sendNewEmail = async (req, res) => {
   try {
-    console.log('📥 sendNewEmail req.body:', JSON.stringify(req.body, null, 2));
-
     const { recipientEmail, subject, body, attachments = [], labels = [] } = req.body;
+
     if (!recipientEmail || !subject || !body) {
       return res.status(400).json({ success: false, message: 'Required fields missing' });
     }
 
     const invalidPattern = /^(https?:\/\/|\/:)/;
-    for (const field of [recipientEmail, subject, body, ...labels, ...attachments.map(a => a.path || '')]) {
+    const fieldsToCheck = [recipientEmail, subject, body, ...labels, ...attachments.map(a => a?.path || '')];
+
+    for (const field of fieldsToCheck) {
       if (typeof field === 'string' && invalidPattern.test(field)) {
-        console.error('❌ Invalid field content:', field);
-        return res.status(400).json({ success: false, message: 'Invalid field content: URLs not allowed' });
+        return res.status(400).json({ success: false, message: 'Invalid content: URLs not allowed' });
       }
     }
 
     const senderId = req.user?.id;
-    if (!senderId) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: sender missing' });
-    }
+    if (!senderId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
     const recipient = await getUserByEmail(recipientEmail);
-    if (!recipient) {
-      return res.status(404).json({ success: false, message: 'Recipient not found' });
-    }
+    if (!recipient) return res.status(404).json({ success: false, message: 'Recipient not found' });
 
-    // Store in "sent" and "inbox"
     await Email.createEmail({ senderId, recipientId: recipient.id, subject, body, folder: 'sent', attachments, labels });
     await Email.createEmail({ senderId, recipientId: recipient.id, subject, body, folder: 'inbox', attachments, labels });
 
@@ -94,15 +89,13 @@ export const sendNewEmail = async (req, res) => {
   }
 };
 
-// Fetch emails
+// ✅ Get emails
 export const getEmails = async (req, res) => {
   try {
     const userId = req.user?.id;
     const folder = req.query.folder || null;
 
-    if (!userId) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
-    }
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
     let query = `SELECT * FROM emails WHERE (senderId = ? OR recipientId = ?) AND isDeleted = false`;
     const params = [userId, userId];
@@ -122,7 +115,7 @@ export const getEmails = async (req, res) => {
   }
 };
 
-// Get email by ID
+// ✅ Get email by ID
 export const getEmailById = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -133,9 +126,7 @@ export const getEmailById = async (req, res) => {
       [emailId, userId, userId]
     );
 
-    if (!rows[0]) {
-      return res.status(404).json({ success: false, message: 'Email not found' });
-    }
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'Email not found' });
 
     res.status(200).json({ success: true, email: rows[0] });
   } catch (error) {
@@ -144,7 +135,7 @@ export const getEmailById = async (req, res) => {
   }
 };
 
-// Move to trash
+// ✅ Move to trash
 export const moveToTrash = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -166,7 +157,7 @@ export const moveToTrash = async (req, res) => {
   }
 };
 
-// Permanently delete email
+// ✅ Permanently delete
 export const deleteEmail = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -188,7 +179,7 @@ export const deleteEmail = async (req, res) => {
   }
 };
 
-// Mark as read
+// ✅ Mark as read
 export const markAsRead = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -210,7 +201,7 @@ export const markAsRead = async (req, res) => {
   }
 };
 
-// Star email
+// ✅ Star email
 export const starEmail = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -232,22 +223,18 @@ export const starEmail = async (req, res) => {
   }
 };
 
-// Update email (read, star, folder, labels)
+// ✅ Update email (read, star, folder, labels)
 export const updateEmail = async (req, res) => {
   try {
-    console.log('📥 updateEmail req.body:', JSON.stringify(req.body, null, 2));
-
     const userId = req.user?.id;
     const emailId = req.params.id;
     const { isRead, isStarred, folder, labels } = req.body;
 
     const invalidPattern = /^(https?:\/\/|\/:)/;
     if (folder && invalidPattern.test(folder)) {
-      console.error('❌ Invalid folder:', folder);
       return res.status(400).json({ success: false, message: 'Invalid folder: URLs not allowed' });
     }
     if (labels && labels.some(label => typeof label === 'string' && invalidPattern.test(label))) {
-      console.error('❌ Invalid labels:', labels);
       return res.status(400).json({ success: false, message: 'Invalid labels: URLs not allowed' });
     }
 
@@ -293,7 +280,7 @@ export const updateEmail = async (req, res) => {
   }
 };
 
-// Email stats for dashboard
+// ✅ Email stats
 export const getEmailStats = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -320,3 +307,5 @@ export const getEmailStats = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to retrieve email stats' });
   }
 };
+
+export default sendAppEmail;

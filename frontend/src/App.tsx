@@ -1,7 +1,5 @@
-// App.tsx
 import React, { useEffect, Suspense, Component, ReactNode } from 'react';
 import {
-  BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
@@ -9,7 +7,6 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { useAdminAuth } from './context/AdminAuthContext'; // ✅ Make sure this exists
 import './index.css';
 
 // Lazy-loaded pages
@@ -27,6 +24,23 @@ const UserDashboard = React.lazy(() => import('./pages/user/UserDashboard'));
 const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminSignIn = React.lazy(() => import('./pages/admin/AdminSignIn'));
 const AdminSignUp = React.lazy(() => import('./pages/admin/AdminSignUp'));
+const OTPLogin = React.lazy(() => import('./pages/auth/OTPLogin'));
+const SuperAdminSignIn = React.lazy(() => import('./pages/superAdmin/SuperAdminSignin'));
+const SuperAdminDashboard = React.lazy(() => import('./pages/superAdmin/SuperAdminDashboard'));
+
+const AdminAuthProvider = React.lazy(() =>
+  import('./context/AdminAuthContext').then((m) => ({ default: m.AdminAuthProvider }))
+);
+const AdminProtectedRoute = React.lazy(() =>
+  import('./context/AdminProtectedRoute').then((m) => ({ default: m.default }))
+);
+
+// ❌ DO NOT lazy load SuperAdminAuthProvider
+// ✅ Import SuperAdminAuthProvider directly
+import SuperAdminAuthProvider from './context/SuperAdminContext';
+const SuperAdminProtectedRoute = React.lazy(() =>
+  import('./context/SuperAdminProtectedRoute').then((m) => ({ default: m.default }))
+);
 
 // Error Boundary
 type ErrorBoundaryState = { hasError: boolean; error: Error | null };
@@ -73,24 +87,14 @@ const PrivateRoute: React.FC<{ children: ReactNode; role?: 'user' | 'admin' }> =
   return <>{children}</>;
 };
 
-// Admin route wrapper using admin auth context
-const AdminProtectedRoute: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { isAdminAuthenticated, adminUser } = useAdminAuth();
-  const location = useLocation();
-
-  if (!isAdminAuthenticated || adminUser?.role !== 'admin') {
-    return <Navigate to="/admin/signin" state={{ from: location }} replace />;
-  }
-  return <>{children}</>;
-};
-
 // Layout wrapper
 const LayoutWrapper: React.FC<{ children: ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isAuthRoute = [
-    '/signin', '/signup', '/verify-email',
+    '/signin', '/signup', '/verify-email', '/otp-login',
     '/forgot-password', '/reset-password',
     '/admin', '/admin/signin', '/admin/signup',
+    '/super-admin', '/super-admin/signin'
   ].some((path) => location.pathname.startsWith(path));
 
   return (
@@ -116,7 +120,6 @@ const LayoutWrapper: React.FC<{ children: ReactNode }> = ({ children }) => {
   );
 };
 
-// Main App component
 const App: React.FC = () => {
   const { isAuthenticated, role } = useAuth();
 
@@ -125,54 +128,65 @@ const App: React.FC = () => {
   }, [isAuthenticated, role]);
 
   return (
-    <Router basename={import.meta.env.BASE_URL}>
-      <LayoutWrapper>
-        <ErrorBoundary>
-          <Suspense fallback={<div className="text-center p-6 text-gray-600">Loading...</div>}>
-            <Routes>
-              {/* Auth Routes */}
-              <Route element={<RedirectIfAuthenticated redirectTo="/" />}>
-                <Route path="/signin" element={<SignIn />} />
-                <Route path="/signup" element={<SignUp />} />
-                <Route path="/verify-email" element={<VerifyEmail />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password/:token" element={<ResetPassword />} />
-              </Route>
+    <LayoutWrapper>
+      <ErrorBoundary>
+        <Suspense fallback={<div className="text-center p-6 text-gray-600">Loading...</div>}>
+          <Routes>
+            {/* Auth Routes */}
+            <Route element={<RedirectIfAuthenticated redirectTo="/" />}>
+              <Route path="/signin" element={<SignIn />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
+              <Route path="/otp-login" element={<OTPLogin />} />
+            </Route>
 
-              {/* Admin Routes */}
-              <Route path="/admin" element={<Navigate to="/admin/signin" replace />} />
-              <Route path="/admin/signin" element={<AdminSignIn />} />
-              <Route path="/admin/signup" element={<AdminSignUp />} />
-              <Route path="/admin/dashboard" element={
+            {/* Admin Routes */}
+            <Route path="/admin" element={<Navigate to="/admin/signin" replace />} />
+            <Route path="/admin/signin" element={<AdminSignIn />} />
+            <Route path="/admin/signup" element={<AdminSignUp />} />
+            <Route path="/admin/dashboard" element={
+              <AdminAuthProvider>
                 <AdminProtectedRoute>
                   <AdminDashboard />
                 </AdminProtectedRoute>
-              } />
+              </AdminAuthProvider>
+            } />
 
-              {/* User Routes */}
-              <Route path="/" element={<PrivateRoute role="user"><UserDashboard /></PrivateRoute>} />
-              <Route path="/user-dashboard" element={<PrivateRoute role="user"><UserDashboard /></PrivateRoute>} />
-              <Route path="/inbox" element={<PrivateRoute role="user"><Inbox /></PrivateRoute>} />
-              <Route path="/profile" element={<PrivateRoute role="user"><Profile /></PrivateRoute>} />
-              <Route path="/email/:id" element={<PrivateRoute role="user"><EmailView /></PrivateRoute>} />
-              <Route path="/compose" element={<PrivateRoute role="user"><ComposeEmail /></PrivateRoute>} />
+            {/* Super Admin Routes */}
+            <Route path="/super-admin/signin" element={<SuperAdminSignIn />} />
+            <Route path="/super-admin/dashboard" element={
+              <SuperAdminAuthProvider>
+                <SuperAdminProtectedRoute>
+                  <SuperAdminDashboard />
+                </SuperAdminProtectedRoute>
+              </SuperAdminAuthProvider>
+            } />
 
-              {/* Logout & Error */}
-              <Route path="/logout" element={<Logout />} />
-              <Route path="/unauthorized" element={
-                <div className="text-center mt-20">
-                  <h2 className="text-2xl font-bold text-red-600">Unauthorized Access</h2>
-                  <p className="text-gray-600">You do not have permission to view this page.</p>
-                </div>
-              } />
+            {/* User Routes */}
+            <Route path="/" element={<PrivateRoute role="user"><UserDashboard /></PrivateRoute>} />
+            <Route path="/user-dashboard" element={<PrivateRoute role="user"><UserDashboard /></PrivateRoute>} />
+            <Route path="/inbox" element={<PrivateRoute role="user"><Inbox /></PrivateRoute>} />
+            <Route path="/profile" element={<PrivateRoute role="user"><Profile /></PrivateRoute>} />
+            <Route path="/email/:id" element={<PrivateRoute role="user"><EmailView /></PrivateRoute>} />
+            <Route path="/compose" element={<PrivateRoute role="user"><ComposeEmail /></PrivateRoute>} />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/signin" replace />} />
-            </Routes>
-          </Suspense>
-        </ErrorBoundary>
-      </LayoutWrapper>
-    </Router>
+            {/* Logout & Error */}
+            <Route path="/logout" element={<Logout />} />
+            <Route path="/unauthorized" element={
+              <div className="text-center mt-20">
+                <h2 className="text-2xl font-bold text-red-600">Unauthorized Access</h2>
+                <p className="text-gray-600">You do not have permission to view this page.</p>
+              </div>
+            } />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/signin" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    </LayoutWrapper>
   );
 };
 
